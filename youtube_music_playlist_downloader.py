@@ -26,7 +26,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else SCRIPT_DIR
 RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", SCRIPT_DIR))
 CONFIG_FILE = APP_DIR / "downloader_settings.json"
-INSTALLER_PATH = APP_DIR / "install.ps1"
+INSTALLER_PATH = APP_DIR / ("install.ps1" if sys.platform.startswith("win") else "install-debian.sh")
 LOGO_PATH = RESOURCE_DIR / "assets" / "wolf-banner.png"
 DEFAULT_OUTPUT = Path.home() / "Downloads" / "YouTube Music"
 DEFAULT_COOKIES_FILE = APP_DIR / "youtube-cookies.txt"
@@ -43,6 +43,12 @@ STAGING_LEFTOVER_SUFFIXES = IMAGE_SUFFIXES | {".description", ".json", ".part", 
 
 class DownloadCancelled(Exception):
     """Raised inside yt-dlp hooks when the user presses Stop."""
+
+
+def dependency_install_command() -> list[str]:
+    if sys.platform.startswith("win"):
+        return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(INSTALLER_PATH)]
+    return ["bash", str(INSTALLER_PATH)]
 
 
 class QueueLogger:
@@ -1570,12 +1576,15 @@ class DownloaderApp:
             messagebox.showerror(APP_TITLE, f"Installer not found:\n{INSTALLER_PATH}")
             return
         self.status.set("Installing dependencies")
-        self._append_log("Starting install.ps1 dependency repair...")
+        self._append_log(f"Starting {INSTALLER_PATH.name} dependency repair...")
         self._start_background_task(self._install_worker, tuple())
 
     def _install_worker(self) -> None:
         try:
-            command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(INSTALLER_PATH)]
+            command = dependency_install_command()
+            if not sys.platform.startswith("win"):
+                self.messages.put(("done", "Run bash install-debian.sh in a terminal to repair dependencies; sudo may ask for your password."))
+                return
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             assert process.stdout is not None
             for line in process.stdout:
@@ -1636,6 +1645,10 @@ class DownloaderApp:
 
     def _kill_browser_and_extract_cookies_worker(self, browser: str, process_names: list[str], cookies_file: Path) -> None:
         try:
+            if not sys.platform.startswith("win"):
+                self.messages.put(("log", "Close the browser manually on Linux before extracting cookies."))
+                self._extract_cookies_worker(browser, cookies_file)
+                return
             closed_any = False
             for process_name in process_names:
                 result = subprocess.run(
@@ -1970,7 +1983,7 @@ def print_dependency_status() -> None:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Download YouTube Music playlists with a Tkinter GUI.")
     parser.add_argument("--check-deps", action="store_true", help="Print dependency status and exit.")
-    parser.add_argument("--install-deps", action="store_true", help="Run install.ps1 dependency repair and exit.")
+    parser.add_argument("--install-deps", action="store_true", help="Run the platform dependency installer and exit.")
     return parser
 
 
@@ -1984,9 +1997,13 @@ def main() -> None:
         if not INSTALLER_PATH.exists():
             print(f"Installer not found: {INSTALLER_PATH}", file=sys.stderr)
             raise SystemExit(1)
-        raise SystemExit(subprocess.call(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(INSTALLER_PATH)]))
+        raise SystemExit(subprocess.call(dependency_install_command()))
 
-    root = Tk()
+    try:
+        root = Tk()
+    except tk.TclError as exc:
+        print(f"Could not open the GUI: {exc}\nRun bash run-debian.sh from a terminal in your graphical desktop session.", file=sys.stderr)
+        raise SystemExit(1) from exc
     DownloaderApp(root)
     root.mainloop()
 

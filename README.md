@@ -18,6 +18,25 @@ Use it only for audio you own, created, have permission to archive, or are other
 - Shows per-playlist queue status plus a live GUI log, and can resume partial downloads.
 - Saves unfinished queue items so they are still there next time the app opens.
 
+## Setup On Debian 12 Desktop
+
+Open a terminal on your Debian graphical desktop and run:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+git clone https://github.com/DisturbedMind/Youtube-Music-Playlist-Downloader.git
+cd Youtube-Music-Playlist-Downloader
+bash install-debian.sh
+bash run-debian.sh
+```
+
+For an existing checkout, get the version containing these scripts first, or copy the updated project to Debian. Run setup as your normal desktop user; it asks for sudo only for system packages. Setup installs Python, Tkinter, venv support, FFmpeg and a project-local Deno runtime, then installs the Python dependencies in `.venv-debian`. This separate environment avoids reusing a Windows `.venv` copied with the project.
+
+Use `bash run-debian.sh --check-deps` to inspect dependencies. If the window does not open, run the launcher in a terminal and copy the error. A graphical desktop session is required. The Windows EXE and PowerShell installer do not run on Debian.
+
+For cookies, sign into YouTube Music in Firefox on Debian and use Firefox extraction, or select an exported cookies file on that machine. Close Firefox manually before extraction; the force-close browser button currently supports Windows only. Check the output and cookie paths if you copied settings from Windows.
+
 ## Setup On Windows
 
 Get the project first:
